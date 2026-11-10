@@ -1321,33 +1321,48 @@ function netUpdate(dt){if(!net.on||!net.send)return;netT-=dt;if(netT<=0&&state!=
   r.tag.visible=!(save.role==='cop'&&r.st.rl!=='cop'&&(Math.hypot(r.x-FX,r.z-FZ)>30||lineBlocked(FX,FZ,r.x,r.z)))}}
 function extraBlips(b){b.push([sites.dealer.x,sites.dealer.z,'#6fd0ff',5,0,'A']);for(const s of robSites)if(s.cd<=0)b.push([s.x,s.z,'#ff4a4a',3.6,0]);for(const r of remotes.values())b.push([r.x,r.z,'#4ff0e0',5.5,1])}
 function mpStatus(t,link){net.status=t;$('mpstat').textContent=t;if(link){net.link=link;$('mplink').hidden=false;$('mplink').textContent=link;$('bLink').hidden=false}}
-const PEER_OPTS=()=>window.KC_PEER||{config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'},
- {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},{urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},{urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}]}};
-let roomApi=null,namedRoom=null,peerObj=null,peerReady=null,peerTries=0;
+// Mehrspieler über öffentliche MQTT-Server (WebSocket, Port 443/8084/8884/8081): kein Gastgeber nötig, geht durch fast jedes Netzwerk
+const MQTT_BROKERS=()=>window.KC_MQTT||['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://public:public@public.cloud.shiftr.io','wss://test.mosquitto.org:8081'];
+let roomApi=null,namedRoom=null,mq=null,mqReady=null,mqTopic='',mqLastPub=0,mqCode='',mqHost=false;const mqPeers=new Map();
 const newCode=()=>Array.from({length:4},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.random()*24|0]).join('');
 function setRoomUI(code){net.code=code||'';$('roomNow').textContent=code?'Raum-Code: '+code:'';$('roomNow').hidden=!code;$('bLeave').hidden=!code;if(code)$('rcode').value=code}
 function clearRemotes(){for(const r of [...remotes.values()])dropRemote(r)}
 function useLobby(){if(!roomApi)return;net.on=true;net.mode='room';net.myId=(roomApi.peers().find(p=>p.sameTab)||{}).peer||'';net.send=s=>{roomApi.presence(s).catch(()=>{})};net.states=()=>roomApi.peers().filter(p=>!p.sameTab&&p.kind==='viewer'&&p.presence).map(p=>[p.peer,p.presence])}
-function loadPeer(){return peerReady||(peerReady=new Promise((ok,no)=>{if(window.Peer)return ok();const sc=document.createElement('script');sc.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';sc.onload=()=>window.Peer?ok():no();sc.onerror=no;document.head.appendChild(sc)}))}
+function loadMqtt(){return mqReady||(mqReady=new Promise((ok,no)=>{if(window.mqtt)return ok();const add=(src,next)=>{const sc=document.createElement('script');sc.src=src;sc.onload=()=>window.mqtt?ok():next();sc.onerror=next;document.head.appendChild(sc)};
+ add('https://cdn.jsdelivr.net/npm/mqtt@5.3.5/dist/mqtt.min.js',()=>add('https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js',()=>{mqReady=null;no(new Error('load'))}))}))}
+function mqConnect(urls,i){return new Promise((ok,no)=>{if(i>=urls.length)return no(new Error('none'));let url=urls[i],done=false;
+ const opts={connectTimeout:6000,reconnectPeriod:2500,clean:true,keepalive:20,clientId:'kc_'+Math.random().toString(16).slice(2,12)};
+ const m=url.match(/^(wss?:\/\/)([^:@\/]+):([^@\/]+)@(.*)$/);if(m){opts.username=m[2];opts.password=m[3];url=m[1]+m[4]}
+ let c;try{c=window.mqtt.connect(url,opts)}catch(e){return mqConnect(urls,i+1).then(ok,no)}
+ const t=setTimeout(()=>{if(done)return;done=true;try{c.end(true)}catch(e){}mqConnect(urls,i+1).then(ok,no)},7500);
+ c.on('error',()=>{});c.once('connect',()=>{if(done)return;done=true;clearTimeout(t);ok(c)})})}
+function mqLink(code){return/^https?:$/.test(location.protocol)?location.origin+location.pathname+'?raum='+code:''}
+function mqStatus(){if(net.mode!=='mqtt')return;const n=mqPeers.size,code=mqCode,link=mqLink(code);
+ const head=mq&&mq.connected?(mqHost?'Raum '+code+' ist offen.':'Du bist in Raum '+code+'.'):'Verbindung kurz weg – verbinde neu …';
+ mpStatus(head+' '+(n?n+' Mitspieler online.':'Noch niemand sonst da.')+' Code für deine Freunde: '+code+(link?' – oder dieser Link:':''),link)}
 async function joinRoom(code,host){code=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);if(code.length<3){mpStatus('Gib einen Raum-Code mit mindestens 3 Zeichen ein.');return}
  clearRemotes();mpStatus('Verbinde mit Raum '+code+' …');
  if(roomApi){try{if(namedRoom)await namedRoom.leave()}catch(e){}namedRoom=null;
   try{namedRoom=await roomApi.join('kc-'+code.toLowerCase())}catch(e){useLobby();setRoomUI('');mpStatus('Der Raum konnte nicht geöffnet werden ('+((e&&e.code)||'Fehler')+'). Ihr seid weiter gemeinsam in der offenen Stadt.');return}
   const R=namedRoom;net.on=true;net.myId=(R.peers().find(p=>p.sameTab)||{}).peer||net.myId;net.send=s=>{R.presence(s).catch(()=>{})};net.states=()=>R.peers().filter(p=>!p.sameTab&&p.kind==='viewer'&&p.presence).map(p=>[p.peer,p.presence]);setRoomUI(code);
   mpStatus((host?'Raum '+code+' erstellt. ':'Du bist in Raum '+code+'. ')+'Deine Freunde tippen den Code '+code+' bei „Raum-Code" ein und drücken „Beitreten".');return}
- try{await loadPeer()}catch(e){mpStatus('Mehrspieler: Der Verbindungsdienst ist nicht erreichbar. In der Claude-Ansicht geht Mehrspieler nur über „Teilen".');return}
- peerTries=0;peerJoin(code,host)}
-function peerJoin(code,host){if(peerObj){try{peerObj.destroy()}catch(e){}peerObj=null}net.on=false;if(++peerTries>3){mpStatus('Verbindung zu Raum '+code+' hat nicht geklappt. Versuch es noch einmal.');return}
- const P=window.Peer,link=/^https?:$/.test(location.protocol)?location.origin+location.pathname+'?raum='+code:'',say=t=>mpStatus(t+' Code für deine Freunde: '+code+(link?' – oder dieser Link:':''),link);
- if(host){const peer=peerObj=new P('kesselcity-'+code.toLowerCase(),PEER_OPTS()),conns=[],others={};peer.on('open',()=>{net.on=true;net.mode='host';net.myId='host';setRoomUI(code);say('Raum '+code+' ist offen.')});
-  peer.on('connection',c=>{conns.push(c);c.on('data',d=>{if(d&&typeof d==='object')others[c.peer]={d,t:performance.now()}});const bye=()=>{delete others[c.peer];const i=conns.indexOf(c);if(i>=0)conns.splice(i,1)};c.on('close',bye);c.on('error',bye)});
-  net.send=s=>{const now=performance.now();for(const k in others)if(now-others[k].t>6000)delete others[k];for(const c of conns){if(!c.open)continue;const m={host:s};for(const k in others)if(k!==c.peer)m[k]=others[k].d;c.send(m)}};net.states=()=>Object.keys(others).map(k=>[k,others[k].d]);
-  peer.on('error',e=>{if(e.type==='unavailable-id')peerJoin(code,false);else mpStatus('Mehrspieler-Fehler: '+e.type)})}
- else{const peer=peerObj=new P('kc'+Math.random().toString(36).slice(2,12),PEER_OPTS());let conn=null,map={};peer.on('open',()=>{conn=peer.connect('kesselcity-'+code.toLowerCase(),{reliable:false});const to=setTimeout(()=>{if(!net.on)mpStatus('Raum '+code+' gefunden, aber die Verbindung wird blockiert. Probiert: beide im selben WLAN, oder einer per Handy-Hotspot. Dann „Beitreten“ nochmal drücken.')},14000);conn.on('open',()=>clearTimeout(to));conn.on('open',()=>{net.on=true;net.mode='client';net.myId=peer.id;setRoomUI(code);say('Du bist in Raum '+code+'.')});conn.on('data',d=>{if(d&&typeof d==='object')map=d});conn.on('close',()=>{map={};net.on=false;clearRemotes();setRoomUI('');mpStatus('Der Gastgeber hat den Raum verlassen. Erstelle einen neuen Raum oder tritt wieder bei.')})});
-  net.send=s=>{if(conn&&conn.open)conn.send(s)};net.states=()=>Object.entries(map);
-  peer.on('error',e=>{if(e.type==='peer-unavailable')peerJoin(code,true);else mpStatus('Mehrspieler-Fehler: '+e.type)})}}
+ try{await loadMqtt()}catch(e){mpStatus('Mehrspieler: Der Verbindungsdienst konnte nicht geladen werden. Prüfe deine Internetverbindung und lade die Seite neu.');return}
+ mqLeave();
+ let c;try{c=await mqConnect(MQTT_BROKERS(),0)}catch(e){mpStatus('Kein Mehrspieler-Server erreichbar. Euer Netzwerk blockiert die Verbindung vielleicht – probiert einen Handy-Hotspot und drückt nochmal „Beitreten".');return}
+ mq=c;mqCode=code;mqHost=!!host;mqPeers.clear();net.myId='p'+Math.random().toString(36).slice(2,10);mqTopic='kesselcity2/'+code.toLowerCase()+'/';
+ const sub=()=>c.subscribe(mqTopic+'s/+',{qos:0});sub();
+ c.on('message',(tp,buf)=>{if(c!==mq||!tp.startsWith(mqTopic))return;const id=tp.slice(mqTopic.length+2);if(id===net.myId||!/^p[a-z0-9]{1,16}$/.test(id))return;
+  if(!buf||!buf.length){mqPeers.delete(id);mqStatus();return}if(buf.length>8000)return;let st;try{st=JSON.parse(new TextDecoder().decode(buf))}catch(e){return}
+  if(!st||typeof st!=='object')return;const isNew=!mqPeers.has(id);mqPeers.set(id,{st,t:performance.now()});if(isNew)mqStatus()});
+ c.on('connect',()=>{if(c===mq){sub();mqStatus()}});c.on('offline',()=>{if(c===mq)mqStatus()});
+ net.on=true;net.mode='mqtt';
+ net.send=s=>{const now=performance.now();if(now-mqLastPub<100||!mq||!mq.connected)return;mqLastPub=now;mq.publish(mqTopic+'s/'+net.myId,JSON.stringify(s),{qos:0})};
+ net.states=()=>{const now=performance.now(),o=[];for(const [k,v] of mqPeers){if(now-v.t>6000){mqPeers.delete(k);mqStatus();continue}o.push([k,v.st])}return o};
+ setRoomUI(code);mqStatus()}
+function mqLeave(){if(!mq)return;const c=mq;mq=null;try{c.publish(mqTopic+'s/'+net.myId,'',{qos:0});setTimeout(()=>{try{c.end(true)}catch(e){}},300)}catch(e){}mqPeers.clear();net.on=false;net.mode=''}
+addEventListener('pagehide',()=>mqLeave());
 async function leaveRoom(){clearRemotes();setRoomUI('');if(roomApi){try{if(namedRoom)await namedRoom.leave()}catch(e){}namedRoom=null;useLobby();mpStatus('Raum verlassen. Du bist wieder in der offenen Stadt mit allen, die das Spiel offen haben.');return}
- if(peerObj){try{peerObj.destroy()}catch(e){}peerObj=null}net.on=false;mpStatus('Raum verlassen. Erstelle einen Raum oder gib einen Code ein.')}
+ mqLeave();mpStatus('Raum verlassen. Erstelle einen Raum oder gib einen Code ein.')}
 async function netInit(){const nm=$('pname'),rc=$('rcode');nm.value=save.name;nm.addEventListener('input',()=>{save.name=nm.value.trim().slice(0,14)||'Spieler';saveGame()});nm.addEventListener('keydown',e=>e.stopPropagation());
  rc.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter')joinRoom(rc.value,false)});
  $('bRoomNew').addEventListener('click',()=>joinRoom(newCode(),true));$('bRoomJoin').addEventListener('click',()=>joinRoom(rc.value,false));$('bLeave').addEventListener('click',leaveRoom);
