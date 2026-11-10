@@ -1844,6 +1844,18 @@ function showWsel(){let h='';for(let i=0;i<WN;i++){if(!player.has[i])continue;co
 const rc=$('radar').getContext('2d');
 const POI=[['casino','#ffd84a','$','Casino'],['rudi','#ffb627','R','Rudis Werkstatt'],['dealer','#6fd0ff','A','Autohaus Kessel'],['davidoff','#d4a017','D','DAVIDOFF GMBH'],['ammu','#ff8a3d','W','Eisen-Franz Waffen'],['bank','#9ad66f','B','Kesselbank'],['hosp','#ffffff','+','Klinik'],['police','#3b8bff','P','Polizei']];
 const waypoint={on:false,x:0,z:0};
+// Navi: kürzester Weg über das Straßenraster (Kreuzungen alle CELL Meter)
+function navRoute(ax,az,bx,bz){
+ // Punkt auf die nächste Straßenmitte legen und die zwei Kreuzungen dieser Straße liefern
+ const snap=(x,z)=>{const X0=clamp(Math.round(x/CELL),0,N)*CELL,Z0=clamp(Math.round(z/CELL),0,N)*CELL;
+  if(Math.abs(z-Z0)<=Math.abs(x-X0)){const sx=clamp(x,0,WORLD);return{p:[sx,Z0],h:1,line:Z0,I:[[clamp(Math.floor(sx/CELL),0,N)*CELL,Z0],[clamp(Math.ceil(sx/CELL),0,N)*CELL,Z0]]}}
+  const sz=clamp(z,0,WORLD);return{p:[X0,sz],h:0,line:X0,I:[[X0,clamp(Math.floor(sz/CELL),0,N)*CELL],[X0,clamp(Math.ceil(sz/CELL),0,N)*CELL]]}};
+ const S=snap(ax,az),E=snap(bx,bz);
+ if(S.h===E.h&&Math.abs(S.line-E.line)<1){const lo=S.h?Math.min(S.p[0],E.p[0]):Math.min(S.p[1],E.p[1]);return[[ax,az],S.p,E.p,[bx,bz]]}
+ let best=null,bd=1e9;
+ for(const A of S.I)for(const B of E.I){const d=Math.hypot(A[0]-S.p[0],A[1]-S.p[1])+Math.abs(A[0]-B[0])+Math.abs(A[1]-B[1])+Math.hypot(B[0]-E.p[0],B[1]-E.p[1]);if(d<bd){bd=d;best=[A,B]}}
+ const [A,B]=best;const mid=(Math.abs(A[0]-B[0])<1||Math.abs(A[1]-B[1])<1)?[]:[S.h?[B[0],A[1]]:[A[0],B[1]]];
+ return[[ax,az],S.p,A,...mid,B,E.p,[bx,bz]]}
 function setWaypoint(x,z){waypoint.on=true;waypoint.x=x;waypoint.z=z;sfx.click();hudSub('Wegpunkt gesetzt · '+districtAt(x,z)+' · '+Math.round(Math.hypot(x-FX,z-FZ))+' m',2.5)}
 function clearWaypoint(){waypoint.on=false;hudSub('Wegpunkt gelöscht.',1.6)}
 function radarBlips(){const b=[];
@@ -1864,6 +1876,9 @@ function radarBlips(){const b=[];
  return b}
 function drawRadar(){const S=316,c=S/2,sp=player.car?player.car.speed:0,s=c/(105+sp*1.6),cy=Math.cos(camYaw),sy=Math.sin(camYaw);
  rc.setTransform(1,0,0,1,0,0);rc.fillStyle='#17425a';rc.fillRect(0,0,S,S);rc.translate(c,c);rc.save();rc.rotate(camYaw);rc.scale(s,s);rc.drawImage(mapCanvas,-MAPO-FX,-MAPO-FZ,WORLD+2*MAPO,WORLD+2*MAPO);rc.restore();
+ {const tg=waypoint.on?[waypoint.x,waypoint.z,'#ff4fd8']:obj.on?[obj.x,obj.z,'#ffe14a']:null;
+  if(tg){const pts=navRoute(FX,FZ,tg[0],tg[1]),T=p=>{const dx=(p[0]-FX)*s,dz=(p[1]-FZ)*s;return[dx*cy-dz*sy,dx*sy+dz*cy]};
+   rc.lineJoin='round';rc.lineCap='round';for(const [w,col] of[[9,'rgba(0,0,0,.75)'],[5,tg[2]]]){rc.strokeStyle=col;rc.lineWidth=w;rc.beginPath();pts.forEach((p,i)=>{const q=T(p);i?rc.lineTo(q[0],q[1]):rc.moveTo(q[0],q[1])});rc.stroke()}}}
  for(const b of radarBlips()){let dx=(b[0]-FX)*s,dz=(b[1]-FZ)*s,x=dx*cy-dz*sy,y=dx*sy+dz*cy;const l=Math.hypot(x,y),lim=c-12;if(l>lim){if(!b[4])continue;x*=lim/l;y*=lim/l}
   rc.fillStyle='#000';rc.beginPath();rc.arc(x,y,b[3]+2.5,0,TAU);rc.fill();rc.fillStyle=b[2];rc.beginPath();rc.arc(x,y,b[3],0,TAU);rc.fill();if(b[5]){rc.fillStyle='#000';rc.font='bold 11px sans-serif';rc.textAlign='center';rc.textBaseline='middle';rc.fillText(b[5],x,y+.5)}}
  const h=player.car?player.car.h:player.h,vx=Math.sin(h),vz=Math.cos(h),ax=vx*cy-vz*sy,ay=vx*sy+vz*cy;rc.save();rc.rotate(Math.atan2(ax,-ay));rc.scale(1.35,1.35);rc.fillStyle='#000';rc.beginPath();rc.moveTo(0,-13);rc.lineTo(9,10);rc.lineTo(0,5);rc.lineTo(-9,10);rc.closePath();rc.fill();rc.fillStyle='#fff';rc.beginPath();rc.moveTo(0,-9.5);rc.lineTo(6,7);rc.lineTo(0,3.5);rc.lineTo(-6,7);rc.closePath();rc.fill();rc.restore();
@@ -1896,6 +1911,8 @@ function drawBigMap(){const cv=$('bigmap'),g=cv.getContext('2d'),S=cv.width,k=S/
  for(const r of remotes.values()){if(save.role==='cop'&&r.st.rl!=='cop')continue;dot(r.x,r.z,r.st.rl==='cop'?'#3b8bff':'#4ff0e0',8,'',1)}
  for(const a of alarms){dot(a.x,a.z,'#ff2a2a',11,'!',1);lbl(a.x,a.z,'ALARM: '+a.name,'#ff6a6a')}
  if(obj.on)dot(obj.x,obj.z,'#ffe14a',10,'',1);
+ {const tg=waypoint.on?[waypoint.x,waypoint.z,'#ff4fd8']:obj.on?[obj.x,obj.z,'#ffe14a']:null;
+  if(tg){const pts=navRoute(FX,FZ,tg[0],tg[1]);g.lineJoin='round';g.lineCap='round';for(const [w,col] of[[12,'rgba(0,0,0,.75)'],[7,tg[2]]]){g.strokeStyle=col;g.lineWidth=w;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.stroke()}}}
  if(waypoint.on)dot(waypoint.x,waypoint.z,'#ff4fd8',9,'✕',1);
  dot(FX,FZ,'#fff',8,'',1);
  $('stats').innerHTML=[['Kontostand','€ '+save.cash.toLocaleString('de-AT')],['Aufträge erledigt',save.done+' ('+Math.min(save.mi,MISSIONS.length)+'/'+MISSIONS.length+' der Story)'],['Geheimpakete',save.pk.length+' / 20'],['Geheimwaffen',save.eggs.length+' / 3'],['Waffen besessen',player.has.filter(Boolean).length-1+' / '+(WN-1)],['Eigene Autos',save.own.length],['Häuser',save.house.length+' / '+houses.length],['Überfälle',save.robs],['Stunt-Sprünge',save.stunts],['Längster Flug',save.best.toFixed(1).replace('.',',')+' s'],['Taxifahrten',save.fares],['Zerstörte Fahrzeuge',save.wrecks]].map(r=>'<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('')}
@@ -1924,8 +1941,8 @@ function audioInit(){if(AC){if(AC.state==='suspended')AC.resume();return}try{AC=
  noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);{const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}
  {const o1=AC.createOscillator(),o2=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();o1.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=500;g.gain.value=0;o1.connect(f);o2.connect(f);f.connect(g);g.connect(master);o1.start();o2.start();eng={o1,o2,f,g}}
  {const o=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();o.type='sawtooth';f.type='bandpass';f.frequency.value=900;f.Q.value=2;g.gain.value=0;o.connect(f);f.connect(g);g.connect(master);o.start();eng2={o,f,g}}
- cityN=loopNoise('bandpass',420,.7);cityN.g.gain.value=.012;
- skidN=loopNoise('bandpass',1500,3);rainN=loopNoise('highpass',3500,.5);heliN=loopNoise('lowpass',260,1);{const l=AC.createOscillator(),lg=AC.createGain();l.frequency.value=13;lg.gain.value=.5;l.connect(lg);const tr=AC.createGain();tr.gain.value=.5;lg.connect(tr.gain);heliN.g.disconnect();heliN.g.connect(tr);tr.connect(master);l.start()}
+ cityN=null;
+ skidN=loopNoise('bandpass',1500,3);rainN=loopNoise('bandpass',700,.5);heliN=loopNoise('lowpass',260,1);{const l=AC.createOscillator(),lg=AC.createGain();l.frequency.value=13;lg.gain.value=.5;l.connect(lg);const tr=AC.createGain();tr.gain.value=.5;lg.connect(tr.gain);heliN.g.disconnect();heliN.g.connect(tr);tr.connect(master);l.start()}
  {const o=AC.createOscillator(),l=AC.createOscillator(),lg=AC.createGain(),g=AC.createGain();o.type='square';o.frequency.value=560;l.type='square';l.frequency.value=1.3;lg.gain.value=120;l.connect(lg);lg.connect(o.frequency);const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=1800;g.gain.value=0;o.connect(f);f.connect(g);g.connect(master);o.start();l.start();sirenN={g}}
  {const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain();o1.type=o2.type='square';o1.frequency.value=392;o2.frequency.value=494;g.gain.value=0;const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=2200;o1.connect(f);o2.connect(f);f.connect(g);g.connect(master);o1.start();o2.start();hornN={g}}
  radioLP=AC.createBiquadFilter();radioLP.type='lowpass';radioLP.frequency.value=520;radioGain=AC.createGain();radioGain.gain.value=0;radioLP.connect(radioGain);radioGain.connect(master);radioPat=radioBuild(STATIONS[radioIdx])}
@@ -1965,14 +1982,14 @@ function showRadio(){H.radio.textContent='♪ '+STATIONS[radioIdx].name;H.radio.
 function updateAudio(dt){if(!AC)return;const t=AC.currentTime,c=player.car,play=state==='play'||state==='over';
  if(c&&play&&!c.dead){const s=Math.min(1,Math.abs(c.vf)/c.t.max),g5=Math.min(4,s*5|0),rpm=s*5-g5,f=52+(.3+.7*rpm)*95+g5*7+(c.air>0?40:0),lux=(c.t.lux?1.35:1)*(c.t.bike?1.55:1);
   eng.o1.frequency.setTargetAtTime(f*lux,t,.05);eng.o2.frequency.setTargetAtTime(f*.5*lux,t,.05);eng.f.frequency.setTargetAtTime(380+s*900+Math.abs(c.in.thr)*500,t,.08);eng.g.gain.setTargetAtTime(.05+Math.abs(c.in.thr)*.05+s*.03,t,.08);
-  eng2.o.frequency.setTargetAtTime(f*2*lux,t,.05);eng2.f.frequency.setTargetAtTime(700+s*2400,t,.08);eng2.g.gain.setTargetAtTime(.012+s*.03*(c.t.lux?1.8:1),t,.1);
+  eng2.o.frequency.setTargetAtTime(f*2*lux,t,.05);eng2.f.frequency.setTargetAtTime(700+s*2400,t,.08);eng2.g.gain.setTargetAtTime(s*.022*(c.t.lux?1.6:1),t,.1);
   if(lastThr>.5&&c.in.thr<=0&&s>.35&&Math.random()<.5)sfx.pop();lastThr=c.in.thr}
  else{eng.g.gain.setTargetAtTime(0,t,.1);eng2.g.gain.setTargetAtTime(0,t,.1);lastThr=0}
  if(!c&&play&&!player.ride&&player.amp>.3){stepT-=dt*(player.amp>.8?2.9:2);if(stepT<=0){stepT=1;sfx.step(player.amp>.8)}}
  if(cityN)cityN.g.gain.setTargetAtTime(play?.014+Math.min(.02,(peds.length+cars.length)*.0004):0,t,1);
  skidN.g.gain.setTargetAtTime(c?sfx.skidLvl*.22:0,t,.05);sfx.skidLvl*=Math.exp(-8*dt);
  sirenN.g.gain.setTargetAtTime(sfx.sirenOn&&play?.03+att(sfx.sirenD*.75)*.1:0,t,.2);
- heliN.g.gain.setTargetAtTime(heli.vol*.9,t,.2);rainN.g.gain.setTargetAtTime(RAIN*.1,t,.5);
+ heliN.g.gain.setTargetAtTime(heli.vol*.9,t,.2);rainN.g.gain.setTargetAtTime(RAIN>.2?RAIN*.035:0,t,.8);
  hornN.g.gain.setTargetAtTime(c&&play&&K('KeyH')?.16:0,t,.015);
  const on=!!c&&play&&radioIdx>0&&!!radioPat;radioGain.gain.setTargetAtTime(on?.3:0,t,.25);if(on){if(!radioOn)showRadio();radioTick()}radioOn=on}
 // ================= UMWELT, KAMERA, SPIELSCHLEIFE =================
