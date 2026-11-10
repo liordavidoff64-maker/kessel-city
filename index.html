@@ -143,6 +143,11 @@ body.touch #hint{display:none}
 #casStats{margin:0;font-size:12px;color:#a8d4b8}
 #racebox{position:absolute;left:50%;top:52px;transform:translateX(-50%);text-align:center;font-size:18px;font-weight:700;white-space:nowrap}
 #racebox b{color:var(--amber)}#racebox small{display:block;font-size:14px;margin-top:2px;color:var(--ice)}
+#closed{background:radial-gradient(ellipse at 50% 30%,#1a2030 0%,rgba(6,8,12,.97) 70%);align-items:center;justify-content:center;text-align:center;z-index:20}
+.cl{max-width:520px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.cl h2{font-family:var(--f-display);font-weight:400;font-size:clamp(44px,10vw,88px);line-height:.9;margin:0;color:var(--ice);text-shadow:4px 4px 0 var(--hot),8px 8px 0 #000}
+.cl h2 em{font-style:normal;color:var(--amber)}
+.cl p{margin:0;font-size:18px;line-height:1.5}
 /* Menü */
 .ov{position:absolute;inset:0;display:flex;padding-block:22px;padding-left:var(--gl);padding-right:var(--gr);overflow:auto}
 #menu{align-items:flex-end;background:linear-gradient(180deg,rgba(10,12,18,.05) 0%,rgba(10,12,18,.2) 40%,rgba(10,12,18,.92) 100%)}
@@ -262,6 +267,7 @@ body.touch .keys{display:none}
     <p id="casMsg" aria-live="polite"></p><div id="casBtns"></div>
     <p id="casStats"></p><p style="margin:0;font-size:12px;color:#a8d4b8">6 Decks · Geber steht auf 17 · Blackjack zahlt 3:2 · Versicherung 2:1 · Tasten: H Karte, S Stehen, D Verdoppeln, T Teilen</p>
     <div class="btnrow"><button class="btn" id="bCasX" type="button">Casino verlassen</button></div></div></div>
+  <div id="closed" class="ov" hidden><div class="cl"><p class="eyebrow">Wartungspause</p><h2>Kessel <em>City</em></h2><p id="closedTxt">Die Stadt ist gerade geschlossen. Dein Spielstand ist gespeichert.</p><button class="btn pri" id="bReopen" type="button" hidden>Neu laden</button></div></div>
   <div id="pause" class="ov" hidden>
     <div class="pwrap">
       <div class="mapbox"><canvas id="bigmap" width="1100" height="1100"></canvas><div class="mz"><button class="btn" id="bZin" type="button" aria-label="Hineinzoomen">+</button><button class="btn" id="bZout" type="button" aria-label="Herauszoomen">−</button></div></div>
@@ -2060,7 +2066,7 @@ function step(dt){const sdt=state==='over'?dt*.35:dt;
  updateProjectiles(sdt);updateParts(sdt);updateLights(sdt);envUpdate(sdt);updateCamera(dt);if(state!=='menu')updateHud(dt);updateAudio(dt);
  for(const k in pressed)delete pressed[k]}
 let last=performance.now();
-function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,Math.max(.001,(now-last)/1000));last=now;if(state==='pause'||state==='shop'||state==='casino')return;step(dt);renderer.render(scene,camera)}
+function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,Math.max(.001,(now-last)/1000));last=now;if(state==='pause'||state==='shop'||state==='casino'||state==='closed')return;step(dt);renderer.render(scene,camera)}
 
 // ---------- Menü & Pause
 function pause(on){if(on){if(state!=='play')return;state='pause';if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}drawBigMap();$('pause').hidden=false;$('bResume').focus();if(AC)AC.suspend();saveGame()}
@@ -2078,6 +2084,18 @@ const gfx=()=>{save.q=save.q?0:1;applyQuality();saveGame()};$('bGfx').addEventLi
 $('bSnd').addEventListener('click',()=>{save.snd=save.snd?0:1;$('bSnd').textContent='Ton: '+(save.snd?'An':'Aus');if(master)master.gain.value=save.snd?.85:0;saveGame()});$('bSnd').textContent='Ton: '+(save.snd?'An':'Aus');
 {let armed=0;$('bReset').addEventListener('click',()=>{const b=$('bReset');if(!armed){armed=1;b.textContent='Wirklich löschen?';setTimeout(()=>{armed=0;b.textContent='Spielstand löschen'},3500)}else{try{localStorage.removeItem(SAVE_KEY)}catch(e){}location.reload()}})}
 setInterval(()=>{if(state==='play'||state==='shop')saveGame()},8000);
+// ---------- Not-Aus: Ist die Seite auf Netlify abgeschaltet (Disable project), schließt das Spiel bei allen
+let srvFails=0,srvClosed=false,srvPrev='';
+async function serverCheck(){if(!/^https?:$/.test(location.protocol)||(window.claude&&window.claude.use))return;
+ let st=0,txt='';try{const base=location.origin+location.pathname.replace(/[^/]*$/,'');const r=await fetch(base+'alive.txt?t='+Date.now(),{cache:'no-store'});st=r.status;txt=st===200?await r.text():''}catch(e){return}
+ if(st===429||st>=500&&st!==503)return;const down=!txt.includes('kessel-city-online');
+ if(down){srvFails++;if(srvFails>=2&&!srvClosed)closeGame()}else{srvFails=0;if(srvClosed){$('closedTxt').textContent='Kessel City ist wieder geöffnet.';$('bReopen').hidden=false}}}
+function closeGame(){srvClosed=true;saveGame();srvPrev=state;state='closed';
+ if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}for(const k in keys)keys[k]=false;
+ if(typeof mqLeave==='function')mqLeave();clearRemotes();if(AC)try{AC.suspend()}catch(e){}
+ for(const id of['pause','shop','casino','menu'])$(id).hidden=true;$('closed').hidden=false}
+$('bReopen').addEventListener('click',()=>location.reload());
+setInterval(serverCheck,window.KC_CHECK_MS||30000);
 addEventListener('pagehide',()=>saveGame());addEventListener('beforeunload',()=>saveGame());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveGame()});
 
