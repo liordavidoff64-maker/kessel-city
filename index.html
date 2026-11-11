@@ -631,7 +631,7 @@ const mapCanvas=document.createElement('canvas');mapCanvas.width=mapCanvas.heigh
  for(const r of mapRects){g.fillStyle=r[4]>40?'#cdd6e2':r[4]>12?'#aab3c0':'#8d939d';g.fillRect(X(r[0]),X(r[1]),r[2]*MAPK,r[3]*MAPK);if(r[4]>12){g.fillStyle='rgba(0,0,0,.3)';g.fillRect(X(r[0]),X(r[1]+r[3])-2,r[2]*MAPK,2)}}
  g.strokeStyle='rgba(255,236,180,.3)';g.lineWidth=2;g.setLineDash([9,8]);for(let k=0;k<=N;k++){g.beginPath();g.moveTo(X(0),X(k*CELL));g.lineTo(X(WORLD),X(k*CELL));g.moveTo(X(k*CELL),X(0));g.lineTo(X(k*CELL),X(WORLD));g.stroke()}}
 // ================= FAHRZEUGE =================
-let shake=0,RAIN=0,nightK=0,FX=342,FZ=446,FVX=0,FVZ=0;
+let SNOWY=false,shake=0,RAIN=0,nightK=0,FX=342,FZ=446,FVX=0,FVZ=0;
 const PAINTS=[0xb3261e,0x1f4fa3,0xe6e6e6,0x23262b,0x2e7d4f,0xd98e04,0x7b8794,0x6b2d8c,0x0f8b8d,0xf2efe6,0x8c1c13,0x4a6fa5];
 const CAR_TYPES={
  sedan:{name:'Falke 200',L:4.5,W:1.85,max:36,acc:12,grip:7,hp:100,m:1,belt:.95,roof:1.45,hood:.82,cab:[-1.45,-.95,.35,1.0],wr:.34},
@@ -738,7 +738,7 @@ class Car{
    else if(thr<0){if(vf>1){vf+=34*dt*thr;this.braking=true}else vf+=t.acc*.75*thr*dt*(1-Math.min(1,Math.abs(vf)/(t.max*.32)))}
    vf-=vf*.1*dt;if(!thr)vf-=Math.sign(vf)*Math.min(Math.abs(vf),2.2*dt);
    if(hb)vf-=Math.sign(vf)*Math.min(Math.abs(vf),(this.driver?15:8)*dt);
-   let grip=t.grip*(1-RAIN*.3);if(hb&&this.driver)grip*=.16;else if(Math.abs(vl)>7)grip*=.45;if(this.dead)grip=4;
+   let grip=t.grip*(1-RAIN*(SNOWY?.55:.3));if(hb&&this.driver)grip*=.16;else if(Math.abs(vl)>7)grip*=.45;if(this.dead)grip=4;
    vl*=Math.exp(-grip*dt);
    this.steer+=(inp.steer-this.steer)*Math.min(1,dt*(inp.steer?5.5:9));
    let om=vf*Math.tan(.62/(1+(vf/13)*(vf/13))*this.steer)/(t.L*.6);if(hb&&this.driver&&Math.abs(vf)>5)om*=1.4;
@@ -1314,13 +1314,13 @@ function updateRob(dt){const R=$('rob');for(const s of robSites){if(s.cd>0)s.cd-
  if(state!=='play'){if(rob){rob=null;R.hidden=true}return}
  const s=robNear();
  if(!rob){if(s&&s.cd<=0&&save.role!=='cop'&&K('KeyE')){rob={s,p:0};robIdle=0;scare(s.x,s.z,22);R.hidden=false;
-  if(s.bank){bankAlarm=30;hudBig('Stiller Alarm','Die Polizei kommt in 30 Sekunden.','bad',3.5);hudSub('Tresor knacken: halte <b>E</b>. Mit Freunden geht es schneller.',4)}
+  if(s.bank){bankAlarm=30;djBank();hudBig('Stiller Alarm','Die Polizei kommt in 30 Sekunden.','bad',3.5);hudSub('Tresor knacken: halte <b>E</b>. Mit Freunden geht es schneller.',4)}
   else{crime(32);sfx.wanted();hudSub('Überfall! Bleib im Marker und halte <b>E</b>.',3)}}return}
  if(s!==rob.s){rob=null;bankAlarm=0;R.hidden=true;hudSub('Überfall abgebrochen.',2);return}
  const crew=robCrew(rob.s);
  if(K('KeyE')){robIdle=0;rob.p+=dt/rob.s.time*(1+crew)*(curW().dmg>2?1.35:curW().dmg>1?1:.6);if(Math.random()<dt*2)heat=Math.max(heat,34)}else{robIdle+=dt;rob.p=Math.max(0,rob.p-dt*.15);if(robIdle>4){rob=null;R.hidden=true;return}}
  $('robf').style.transform='scaleX('+Math.min(1,rob.p)+')';$('robt').textContent=rob.s.name+(crew?' · Team ×'+(crew+1):'')+(rob.s.bank&&bankAlarm>0?' · Polizei in '+Math.ceil(bankAlarm)+' s':curW().dmg>1?'':' · mit einer Waffe geht es schneller');
- if(rob.p>=1){bankAlarm=0;const pay=Math.round(rob.s.pay*(1+.5*crew));addCash(pay);crime(rob.s.pay>1800?45:25);rob.s.cd=180;save.robs++;saveGame();hudBig('Überfall geglückt','+ € '+pay.toLocaleString('de-AT')+(crew?' · Team-Bonus':'')+' · Jetzt nichts wie weg!','good',4);sfx.win();rob=null;R.hidden=true}}
+ if(rob.p>=1){bankAlarm=0;const pay=Math.round(rob.s.pay*(1+.5*crew));addCash(pay);crime(rob.s.pay>1800?45:25);rob.s.cd=180;save.robs++;saveGame();hudBig('Überfall geglückt','+ € '+pay.toLocaleString('de-AT')+(crew?' · Team-Bonus':'')+' · Jetzt nichts wie weg!','good',4);sfx.win();djRob(rob.s);rob=null;R.hidden=true}}
 function updateDealer(){const d=Math.hypot(player.x-sites.dealer.x,player.z-sites.dealer.z);if(d>5)dealerArmed=true;if(dealerArmed&&!player.car&&d<2.2&&state==='play'){dealerArmed=false;openShop()}}
 
 // ---------- Mehrspieler: Freunde in derselben Stadt
@@ -1352,8 +1352,8 @@ function netUpdate(dt){if(!net.on||!net.send)return;netT-=dt;if(netT<=0&&state!=
    if(st.d){m.position.set(r.x,r.y+.13,r.z);m.rotation.set(-Math.PI/2,r.h,0,'YXZ')}else{m.position.set(r.x,r.y,r.z);m.rotation.set(0,r.h,0,'YXZ');setHeld(m,clamp(st.w|0,0,WN-1));const hw=WEAPONS[clamp(st.w|0,0,WN-1)];animHuman(m,r.phase,a?1:0,a===2,hw.hold&&!hw.melee?(st.f?2:3):0,false)}r.tag.position.set(r.x,r.y+2.25,r.z)}}
  for(const r of remotes.values()){syncGhostCops(r,r.st.pc,dt);syncGhostHeli(r,r.st.hl,dt)}
  for(const r of [...remotes.values()])if(!seen.has(r.id))dropRemote(r)
- for(const r of remotes.values()){const prev=r.lastRb;r.lastRb=r.st.rb||0;if(save.role==='cop'&&r.st.rb&&r.st.rb!==prev&&r.st.rl!=='cop'){const site=robSites.find(s=>s.id===r.st.rb);if(site)copAlarm(site,r.name)}
-  r.tag.visible=!(save.role==='cop'&&r.st.rl!=='cop'&&(Math.hypot(r.x-FX,r.z-FZ)>30||lineBlocked(FX,FZ,r.x,r.z)))}}
+ for(const r of remotes.values()){const prev=r.lastRb;r.lastRb=r.st.rb||0;if(r.st.rb&&r.st.rb!==prev&&r.st.rl!=='cop'){const site=robSites.find(s=>s.id===r.st.rb);if(site){if(save.role==='cop')copAlarm(site,r.name);else djRemoteRob(r,site)}}
+  r.tag.visible=!(foxHide(r)&&Math.hypot(r.x-FX,r.z-FZ)>25)&&!(save.role==='cop'&&r.st.rl!=='cop'&&(Math.hypot(r.x-FX,r.z-FZ)>30||lineBlocked(FX,FZ,r.x,r.z)))}}
 function extraBlips(b){b.push([sites.dealer.x,sites.dealer.z,'#6fd0ff',5,0,'A']);for(const s of robSites)if(s.cd<=0)b.push([s.x,s.z,'#ff4a4a',3.6,0]);for(const r of remotes.values())b.push([r.x,r.z,'#4ff0e0',5.5,1])}
 function mpStatus(t,link){net.status=t;$('mpstat').textContent=t;if(link){net.link=link;$('mplink').hidden=false;$('mplink').textContent=link;$('bLink').hidden=false}}
 // Mehrspieler über öffentliche MQTT-Server (WebSocket, Port 443/8084/8884/8081): kein Gastgeber nötig, geht durch fast jedes Netzwerk
@@ -1505,7 +1505,7 @@ const houses=[];
 let houseArmed=true;
 function openHouse(h){const own=save.house.includes(h.i);
  openShop({title:own?h.name:'Haus zu verkaufen',sub:own?'Dein Haus':districtAt(h.x,h.z),items(){const L=[];
-  if(!own)L.push({n:'Dieses Haus kaufen',price:h.price,tag:money(h.price),info:'Du startest hier nach dem Aufwachen und kannst deine Autos abstellen',
+  if(!own)L.push({n:'Dieses Haus kaufen',price:h.price,tag:money(h.price),info:'Bringt € '+houseInc(h).toLocaleString('de-AT')+' Miete alle 5 Min. · Du startest hier und kannst deine Autos abstellen',
    act(){save.house.push(h.i);h.mk.children[0].material.color.set(0x62d68c);saveGame();sfx.win();hudBig('Haus gekauft',h.name,'good',3.5);return true}});
   else{L.push({n:'Spielstand speichern',price:0,tag:'Gratis',owned:true,info:'Geld, Waffen, Autos und Umbauten sichern',act(){saveGame();sfx.ok();hudSub('Gespeichert.',2);return true}});
    L.push({n:'Ausruhen',price:0,tag:'Gratis',owned:true,info:'Leben voll, Fahndung weg',act(){player.hp=100;clearWanted();fadeBlink();sfx.ok();return true}});
@@ -1806,6 +1806,7 @@ function updateRace(dt){
   +(rows.length>1?'<small>'+rows.map((r,i)=>(i+1)+'. '+esc(r.n)+(r.fin?' '+fmtRace(r.fin):'')).join(' · ')+'</small>':'')}
 function openRaceMenu(){if(race)return;openShop({title:'Rennstart',sub:'Alle im Raum bekommen eine Einladung und können mit J mitfahren',items(){
  const L=RACES.map((r,i)=>({n:r.n,price:0,owned:true,tag:'Starten',info:(r.P.length-1)+' Kontrollpunkte · '+(r.len/1000).toFixed(1).replace('.',',')+' km · 1. Platz '+money(Math.round(PRIZE[0]*r.m/100)*100)+(save.races.best[i]?' · Bestzeit '+fmtRace(save.races.best[i]):''),act(){raceCreate(i);return true}}));
+ if(net.on)L.push({n:'Fuchsjagd starten',price:0,owned:true,tag:'Du bist der Fuchs',info:'Alle im Raum jagen dich · 5 Min. überleben: € 25.000 · Wer dich fängt: € 15.000 · alle 30 s bist du kurz auf dem Radar',act(){foxStart();return true}});
  L.push({n:'Bilanz',price:0,owned:true,tag:'Info',info:'Rennen gefahren: '+save.races.done+' · Siege: '+save.races.won,act(){return false}});return L}})}
 function updateRaceSite(){mkRace.visible=!race;if(!race)siteCheck('race',sites.race.x,sites.race.z,4,false,openRaceMenu)}
 function raceHint(){if(raceInvite)return'<kbd>J</kbd>Rennen „'+RACES[raceInvite.route].n+'" mitfahren · '+Math.max(0,Math.ceil((raceInvite.start-Date.now())/1000-1))+' s';if(race&&!race.fin)return'<kbd>K</kbd>Rennen aufgeben';return''}
@@ -1881,7 +1882,7 @@ function radarBlips(){const b=[];
  for(const h of houses)b.push([h.x,h.z,save.house.includes(h.i)?'#62d68c':'#6fd0ff',3.4,0]);
  for(const c of cars)if(c.t.cop&&c.ai&&c.ai.mode!=='cruise'&&!c.dead)b.push([c.x,c.z,(performance.now()/200|0)%2?'#3b8bff':'#ff4a4a',4.5,0]);
  if(heli.on)b.push([heli.x,heli.z,'#cfe0ff',4,0]);
- for(const r of remotes.values()){if(save.role==='cop'&&r.st.rl!=='cop')continue;b.push([r.x,r.z,r.st.rl==='cop'?'#3b8bff':'#4ff0e0',5.5,1])}
+ for(const r of remotes.values()){if(save.role==='cop'&&r.st.rl!=='cop')continue;if(foxHide(r))continue;b.push([r.x,r.z,r.st.rl==='cop'?'#3b8bff':'#4ff0e0',5.5,1])}
  for(const a of alarms)b.push([a.x,a.z,(performance.now()/200|0)%2?'#ff2a2a':'#ffffff',8,1,'!']);
  if(copJob){const tx=copJob.kind==='car'?copJob.car:copJob.ped;if(tx)b.push([tx.x,tx.z,(performance.now()/220|0)%2?'#ff4a4a':'#ffd0d0',7,1,'!'])}
  if(waypoint.on)b.push([waypoint.x,waypoint.z,'#ff4fd8',7,1,'✕']);
@@ -1913,7 +1914,8 @@ function drawBigMap(){const cv=$('bigmap'),g=cv.getContext('2d'),S=cv.width,k=S/
  g.font='bold 26px sans-serif';g.textAlign='center';g.fillStyle='rgba(255,255,255,.55)';
  for(const n of[['NORDHANG',114,150],['ZENTRUM',380,222],['SONNBERG',570,112],['WESTEND',114,410],['ALTMARKT',590,400],['HAFEN',342,610]]){const px=X(n[1]),py=Y(n[2]);if(px>0&&px<S&&py>0&&py<S)g.fillText(n[0],px,py)}
  for(const s of sites.spray){dot(s.x,s.z,'#62d68c',7,'T');lbl(s.x,s.z,'Tuning','#62d68c')}
- for(const s of sites.wurst)dot(s.x,s.z,'#ff8a3d',5);
+ for(let i=0;i<sites.wurst.length;i++){const s=sites.wurst[i],own=save.wurst.includes(i);dot(s.x,s.z,own?'#62d68c':'#ff8a3d',5);if(own||mapView.z>=1.8)lbl(s.x,s.z,own?'Dein Würstelstand':'Würstelstand','#ff8a3d',-22)}
+ for(const q of BLITZ){dot(q.x,q.z,'#cfd6de',5,'');if(mapView.z>=1.6)lbl(q.x,q.z,'Blitzer','#cfd6de',-20)}
  for(const s of robSites){dot(s.x,s.z,s.bank?'#9ad66f':'#ff4a4a',s.bank?9:6,s.bank?'B':'€');if(!s.bank&&mapView.z>=1.6)lbl(s.x,s.z,s.name,s.bank?'#9ad66f':'#ff8a8a')}
  for(const h of houses){const own=save.house.includes(h.i);dot(h.x,h.z,own?'#62d68c':'#6fd0ff',6,'H');if(mapView.z>=1.8||own)lbl(h.x,h.z,own?'Dein Haus':'Haus '+money(h.price),own?'#62d68c':'#6fd0ff')}
  for(const p of POI){if(p[0]==='casino')continue;const st=sites[p[0]];if(!st)continue;if(p[0]==='rudi'&&save.role==='cop')continue;const z=p[0]==='hosp'||p[0]==='police'?st.z-20:st.z;dot(st.x,z,p[1],9,p[2]);lbl(st.x,z,p[3],p[1])}
@@ -1921,7 +1923,7 @@ function drawBigMap(){const cv=$('bigmap'),g=cv.getContext('2d'),S=cv.width,k=S/
  if(!race){dot(sites.race.x,sites.race.z,'#ffffff',9,'⚑');lbl(sites.race.x,sites.race.z,'Rennstart','#ffffff')}
  if(race){const P=RACES[race.route].P;g.strokeStyle='rgba(255,216,74,.85)';g.lineWidth=6;g.setLineDash([14,10]);g.beginPath();P.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.stroke();g.setLineDash([])}
  if(save.role==='cop'){dot(sites.police.x,sites.police.z-20,'#3b8bff',12,'P',1);if(copJob){const t=copJob.kind==='car'?copJob.car:copJob.ped;if(t){dot(t.x,t.z,'#ff4a4a',10,'!',1);lbl(t.x,t.z,copJob.name,'#ff8a8a')}}}
- for(const r of remotes.values()){if(save.role==='cop'&&r.st.rl!=='cop')continue;dot(r.x,r.z,r.st.rl==='cop'?'#3b8bff':'#4ff0e0',8,'',1)}
+ for(const r of remotes.values()){if(save.role==='cop'&&r.st.rl!=='cop')continue;if(foxHide(r))continue;dot(r.x,r.z,r.st.rl==='cop'?'#3b8bff':'#4ff0e0',8,'',1)}
  for(const a of alarms){dot(a.x,a.z,'#ff2a2a',11,'!',1);lbl(a.x,a.z,'ALARM: '+a.name,'#ff6a6a')}
  if(obj.on)dot(obj.x,obj.z,'#ffe14a',10,'',1);
  {const tg=waypoint.on?[waypoint.x,waypoint.z,'#ff4fd8']:obj.on?[obj.x,obj.z,'#ffe14a']:null;
@@ -2002,9 +2004,144 @@ function updateAudio(dt){if(!AC)return;const t=AC.currentTime,c=player.car,play=
  if(cityN)cityN.g.gain.setTargetAtTime(play?.014+Math.min(.02,(peds.length+cars.length)*.0004):0,t,1);
  skidN.g.gain.setTargetAtTime(c?sfx.skidLvl*.22:0,t,.05);sfx.skidLvl*=Math.exp(-8*dt);
  sirenN.g.gain.setTargetAtTime(sfx.sirenOn&&play?.03+att(sfx.sirenD*.75)*.1:0,t,.2);
- heliN.g.gain.setTargetAtTime(heli.vol*.9,t,.2);rainN.g.gain.setTargetAtTime(RAIN>.2?RAIN*.035:0,t,.8);
+ heliN.g.gain.setTargetAtTime(heli.vol*.9,t,.2);rainN.g.gain.setTargetAtTime(RAIN>.2&&!SNOWY?RAIN*.035:0,t,.8);
  hornN.g.gain.setTargetAtTime(c&&play&&K('KeyH')?.16:0,t,.015);
  const on=!!c&&play&&radioIdx>0&&!!radioPat;radioGain.gain.setTargetAtTime(on?.3:0,t,.25);if(on){if(!radioOn)showRadio();radioTick()}radioOn=on}
+// ================= EXTRAS: Drift, Blitzer, Einkommen, Radio-DJ, Geisterauto, Fuchsjagd, Schnee =================
+{const st=document.createElement('style');st.textContent=
+ '#drift{position:fixed;left:50%;top:23%;transform:translateX(-50%);text-align:center;font:400 34px var(--f-display,sans-serif);color:#ffd84a;text-shadow:0 3px 0 #000,0 0 14px rgba(0,0,0,.7);pointer-events:none;z-index:6;white-space:nowrap}'+
+ '#drift small{display:block;font:700 15px var(--f-hud,sans-serif);color:#fff;letter-spacing:.12em}'+
+ '#blitz{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:40;transition:opacity .5s ease-out}'+
+ '#foxbox{position:fixed;left:50%;top:96px;transform:translateX(-50%);text-align:center;font-size:17px;font-weight:700;white-space:nowrap;color:#ff9a3d;text-shadow:0 2px 0 #000;pointer-events:none;z-index:6}'+
+ '#foxbox small{display:block;font-size:13px;color:#fff;margin-top:2px}';
+ document.head.appendChild(st);
+ for(const id of['drift','blitz','foxbox']){const d=document.createElement('div');d.id=id;if(id!=='blitz')d.hidden=true;document.body.appendChild(d)}}
+
+// ---------- Farbname für den Radio-DJ
+function colorName(p){let best='bunten',bd=1e9;const n=[['roten',0xc81e1e],['schwarzen',0x101216],['weißen',0xf4f4f0],['blauen',0x1f4fa3],['grünen',0x2fbf4a],['gelben',0xf2c200],['orangen',0xe8731a],['violetten',0x6b2d8c],['türkisen',0x12a3a3],['silbernen',0xb9bec4],['goldenen',0xd4a017],['braunen',0x6b4a2a]];
+ for(const [nm,c] of n){const d=((p>>16&255)-(c>>16&255))**2+((p>>8&255)-(c>>8&255))**2+((p&255)-(c&255))**2;if(d<bd){bd=d;best=nm}}return best}
+function getaway(){const c=player.car;return c?'in einem '+colorName(c.paint)+' '+c.t.name:'zu Fuß'}
+
+// ---------- Radio-DJ (Kessel FM)
+const dj={q:[],t:0,voice:null};
+function djVoice(){if(dj.voice||!('speechSynthesis' in window))return dj.voice;const v=speechSynthesis.getVoices();dj.voice=v.find(x=>/de[-_]AT/i.test(x.lang))||v.find(x=>/^de/i.test(x.lang))||null;return dj.voice}
+function djSay(text,prio){if(dj.q.length>=2&&!prio)return;dj.q.push(text)}
+function djUpdate(dt){if(dj.t>0)dj.t-=dt;if(dj.t>0||!dj.q.length||state!=='play')return;const text=dj.q.shift();dj.t=9;
+ hudSub('📻 <b>Kessel FM:</b> '+esc(text),7);
+ try{if(save.snd&&'speechSynthesis' in window){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='de-AT';const v=djVoice();if(v)u.voice=v;u.rate=1.08;u.pitch=.85;u.volume=.95;speechSynthesis.speak(u)}}catch(e){}}
+if('speechSynthesis' in window)try{speechSynthesis.onvoiceschanged=()=>{dj.voice=null;djVoice()}}catch(e){}
+const djPick=a=>a[Math.random()*a.length|0];
+function djRob(s){djSay(djPick(['Eilmeldung aus '+districtAt(s.x,s.z)+': Überfall auf '+s.name+'! Der Täter flüchtet '+getaway()+'. Bitte bleiben Sie in Ihren Wohnungen.',
+ 'Das gibt’s ja nicht: Schon wieder wurde '+s.name+' ausgeraubt! Zeugen sahen den Täter '+getaway()+'. Die Polizei tappt im Dunkeln.',
+ 'Kessel FM Verkehrsfunk: Rund um '+s.name+' in '+districtAt(s.x,s.z)+' bitte vorsichtig fahren, da flüchtet gerade jemand '+getaway()+'.']),1)}
+function djBank(){djSay('Achtung, Achtung! Stiller Alarm in der Kesselbank! Die Polizei ist unterwegs. Wer da drin ist: Viel Glück, ihr werdet es brauchen.',1)}
+function djRemoteRob(r,s){djSay(djPick(['Eilmeldung: '+r.name+' überfällt gerade '+s.name+' in '+districtAt(s.x,s.z)+'. Wer hilft, kriegt einen Anteil.','Live aus '+districtAt(s.x,s.z)+': '+r.name+' räumt gerade '+s.name+' aus. Kessel City, was ist los mit dir?']))}
+{const _onLand=onLand;onLand=function(air){_onLand(air);if(air>2.4&&Math.random()<.7)djSay('Unglaublich! In '+districtAt(FX,FZ)+' ist gerade jemand '+air.toFixed(1).replace('.',',')+' Sekunden durch die Luft geflogen. Bitte nicht nachmachen.')}}
+let djStars=0;
+function djStarsCheck(){if(stars>=4&&djStars<4)djSay(djPick(['Großeinsatz in '+districtAt(FX,FZ)+'! Die Polizei jagt einen Verrückten '+getaway()+'. Hubschrauber sind in der Luft.','Kessel FM Verkehrsfunk: '+districtAt(FX,FZ)+' großräumig umfahren, dort läuft eine wilde Verfolgungsjagd.']),1);djStars=stars}
+
+// ---------- Drift-Punkte
+const drift={pts:0,t:0,mul:1,idle:0,hp:0,car:null};
+function driftEnd(fail){const el=$('drift');
+ if(drift.t>=1.2&&!fail){const pay=Math.max(10,Math.round(drift.pts/10)*10);addCash(pay);save.driftBest=Math.max(save.driftBest||0,Math.round(drift.pts));
+  el.innerHTML=Math.round(drift.pts).toLocaleString('de-AT')+'<small>DRIFT ×'+drift.mul+' · + € '+pay.toLocaleString('de-AT')+'</small>';sfx.pick();setTimeout(()=>{if(!drift.t)el.hidden=true},1600)}
+ else if(fail&&drift.t>=1){el.innerHTML='CRASH<small>Drift-Punkte verloren</small>';setTimeout(()=>{if(!drift.t)el.hidden=true},1400)}
+ else el.hidden=true;
+ drift.pts=0;drift.t=0;drift.mul=1;drift.idle=0;drift.car=null}
+function driftUpdate(dt){const c=player.car,el=$('drift');
+ if(!c||c.t.bike||c.dead||(drift.car&&drift.car!==c)){if(drift.t)driftEnd(true);return}
+ const sliding=c.air<=0&&c.speed>9&&c.slip>4.2;
+ if(sliding){if(!drift.t){drift.hp=c.hp;drift.car=c}drift.idle=0;drift.t+=dt;drift.mul=Math.min(8,1+Math.floor(drift.t/1.5));drift.pts+=c.slip*c.speed*dt*.6*drift.mul;
+  if(c.hp<drift.hp-12){driftEnd(true);return}
+  if(drift.t>.6){el.hidden=false;el.innerHTML=Math.round(drift.pts).toLocaleString('de-AT')+'<small>DRIFT ×'+drift.mul+'</small>'}}
+ else if(drift.t){drift.idle+=dt;if(c.hp<drift.hp-12){driftEnd(true);return}if(drift.idle>.9)driftEnd(false)}}
+
+// ---------- Blitzer
+const BLITZ=[[2,3.5,0],[5,1.5,0],[7,6.5,0],[3,7.5,0],[1.5,4,1],[4.5,2,1],[6.5,8,1],[8.5,5,1],[4,5.5,0],[5.5,6,1]].map(([a,b,hz],i)=>{
+ const x=hz?a*CELL:a*CELL,z=b*CELL,rx=hz?x+6:x+HALF+1.2,rz=hz?z+HALF+1.2:z+6;
+ // bei hz=1 liegt die Straße waagrecht (z = b*CELL)
+ const g=new T.Group(),pole=new T.Mesh(new T.CylinderGeometry(.09,.09,3,6),new T.MeshLambertMaterial({color:0x8a9099})),box=new T.Mesh(new T.BoxGeometry(.7,1.1,.6),new T.MeshLambertMaterial({color:0xd8dde3})),
+  top=new T.Mesh(new T.BoxGeometry(.72,.18,.62),new T.MeshLambertMaterial({color:0xff8a1d,emissive:0x552200})),lens=new T.Mesh(new T.BoxGeometry(.4,.4,.05),new T.MeshBasicMaterial({color:0x111111}));
+ pole.position.y=1.5;box.position.y=3.1;top.position.y=3.74;lens.position.set(0,3.15,.32);g.add(pole,box,top,lens);g.position.set(rx,SIDE,rz);g.rotation.y=hz?0:-Math.PI/2;scene.add(g);
+ return{x:hz?(a*CELL):x,z:hz?z:z,rx,rz,cd:0,i}});
+// Straßenpunkt: bei senkrechten Straßen x = a*CELL, z = b*CELL; bei waagrechten x = a*CELL, z = b*CELL (a halbzahlig)
+const BLITZ_TXT=['Na servas! {k} km/h – des wird teuer.','Geh bitte, des is ka Autobahn!','Bist deppert? {k} km/h in da Stadt!','Schönes Foto, Oida. Der Blitzer sagt Danke.','Gemma, gemma – aber ned so schnell!','Hoppala, {k} km/h. Da freut sich die Stadtkasse.'];
+function blitzUpdate(dt){const c=player.car;for(const b of BLITZ)if(b.cd>0)b.cd-=dt;
+ if(!c||c.dead||race||save.role==='cop')return;const kmh=c.speed*3.6;
+ for(const b of BLITZ){if(b.cd>0||Math.hypot(c.x-b.x,c.z-b.z)>11)continue;b.cd=5;if(kmh<=80)continue;
+  const el=$('blitz');el.style.transition='none';el.style.opacity=.92;requestAnimationFrame(()=>{el.style.transition='opacity .6s ease-out';el.style.opacity=0});sfx.click();
+  const k=Math.round(kmh);
+  if(stars>0){crime(14);hudBig('GEBLITZT!','Die Polizei hat dein Kennzeichen – Fahndung verschärft!','bad',3);if(Math.random()<.5)djSay('Der Blitzer in '+districtAt(b.x,b.z)+' hat einen Flüchtigen mit '+k+' Sachen erwischt. Die Polizei ist dran.')}
+  else{const fine=Math.min(2500,Math.round((80+(k-80)*4)/10)*10),paid=Math.min(fine,save.cash);addCash(-paid);save.blitz=(save.blitz||0)+1;saveGame();
+   hudBig('GEBLITZT!',djPick(BLITZ_TXT).replace('{k}',k)+' − € '+paid.toLocaleString('de-AT'),'bad',3.2);if(Math.random()<.35)djSay('Und wieder hat’s einen erwischt: '+k+' km/h in '+districtAt(b.x,b.z)+'. Danke für die Spende!')}}}
+
+// ---------- Passives Einkommen: Häuser + Würstelstände
+if(!save.wurst)save.wurst=[];if(!save.incT)save.incT=0;
+const WURST_PRICE=30000,WURST_INC=1200,INC_EVERY=300;
+const houseInc=h=>Math.round(h.price*.02/10)*10;
+function incomeUpdate(dt){save.incT+=dt;if(save.incT<INC_EVERY)return;save.incT=0;
+ let rent=0;for(const h of houses)if(save.house.includes(h.i))rent+=houseInc(h);const w=save.wurst.length*WURST_INC;if(!rent&&!w)return;
+ addCash(rent+w);saveGame();sfx.ok();hudBig('Einnahmen','+ € '+(rent+w).toLocaleString('de-AT')+(rent?' · Miete € '+rent.toLocaleString('de-AT'):'')+(w?' · Würstelstand € '+w.toLocaleString('de-AT'):''),'good',3.5)}
+function wurstNear(){if(player.car)return -1;for(let i=0;i<sites.wurst.length;i++){const s=sites.wurst[i];if(Math.hypot(player.x-s.x,player.z-s.z)<3.2)return i}return -1}
+function wurstHint(){const i=wurstNear();if(i<0)return'';return save.wurst.includes(i)?'Dein Würstelstand · bringt € '+WURST_INC.toLocaleString('de-AT')+' alle 5 Min.':'<kbd>E</kbd>Würstelstand kaufen · € '+WURST_PRICE.toLocaleString('de-AT')}
+{const _rh=robHint;robHint=function(){return _rh()||wurstHint()}}
+function wurstBuyCheck(){if(!pressed.KeyE)return;const i=wurstNear();if(i<0||save.wurst.includes(i))return;
+ if(save.cash<WURST_PRICE){hudSub('Willi: „Für den Stand brauchst € '+WURST_PRICE.toLocaleString('de-AT')+'. Komm wieder, wenn’s klimpert."',3.5);sfx.fail();return}
+ addCash(-WURST_PRICE);save.wurst.push(i);saveGame();sfx.win();hudBig('Würstelstand gekauft!','Bringt dir alle 5 Minuten € '+WURST_INC.toLocaleString('de-AT'),'good',4)}
+
+// ---------- Geisterauto (Rennbestzeit)
+const ghostMat=new T.MeshBasicMaterial({color:0x8fe0ff,transparent:true,opacity:.38,depthWrite:false});
+const gh={rec:[],recT:0,mesh:null,data:null,raceId:null,fin:0};
+function ghostUpdate(dt){
+ if(!race){if(gh.mesh){scene.remove(gh.mesh);gh.mesh=null}gh.raceId=null;return}
+ if(gh.raceId!==race.id){gh.raceId=race.id;gh.rec=[];gh.recT=0;gh.fin=0;save.races.ghost=save.races.ghost||{};gh.data=save.races.ghost[race.route]||null;
+  if(gh.mesh){scene.remove(gh.mesh);gh.mesh=null}
+  if(gh.data){const t=CAR_TYPES[gh.data.ty]||CAR_TYPES.sport;gh.mesh=new T.Mesh(carBodyGeo(t,0xffffff),ghostMat);gh.mesh.rotation.order='YXZ';gh.mesh.renderOrder=4;gh.mesh.visible=false;scene.add(gh.mesh);hudSub('Dein Geisterauto fährt mit · Bestzeit '+fmtRace(save.races.best[race.route]||0),3)}}
+ const now=Date.now();if(now<race.start)return;const t=now-race.start;
+ if(!race.fin&&player.car){gh.recT-=dt;if(gh.recT<=0){gh.recT=.2;const c=player.car;gh.rec.push(Math.round(c.x*10)/10,Math.round(c.z*10)/10,Math.round(c.h*100)/100)}}
+ if(race.fin&&!gh.fin){gh.fin=1;const best=save.races.best[race.route];if(best===race.fin&&gh.rec.length>6){save.races.ghost[race.route]={ty:player.car?player.car.type:'sport',p:gh.rec};saveGame()}}
+ if(gh.mesh&&gh.data){const p=gh.data.p,n=p.length/3,f=t/200,i=Math.floor(f),k=f-i;
+  if(i>=n-1){gh.mesh.visible=false;return}const a=i*3,b=a+3,x=p[a]+(p[b]-p[a])*k,z=p[a+1]+(p[b+1]-p[a+1])*k,h=p[a+2]+angDiff(p[b+2],p[a+2])*k;
+  gh.mesh.visible=true;gh.mesh.position.set(x,groundY(x,z),z);gh.mesh.rotation.set(0,h,0)}}
+
+// ---------- Fuchsjagd (Mehrspieler)
+const FOX_DUR=300000,FOX_PING=30000;let fox=null,foxCatch=0;const foxSeen={};
+function foxStart(){if(!net.on||!remotes.size){hudBig('Fuchsjagd','Dafür brauchst du mindestens einen Freund im Raum.','',3);return}
+ fox={id:'f'+Math.random().toString(36).slice(2,8),foxId:net.myId,foxName:save.name,start:Date.now()+8000,me:1,caught:0,end:0};foxSeen[fox.id]=1;
+ hudBig('Du bist der Fuchs!','8 Sekunden Vorsprung · 5 Minuten überleben = € 25.000','good',4);sfx.wanted();djSay('Achtung Kessel City: '+save.name+' ist heute der Fuchs. Wer ihn fängt, kassiert fünfzehntausend Euro!')}
+function foxSignal(){return fox&&!fox.end&&Date.now()>=fox.start&&((Date.now()-fox.start)%FOX_PING)<4000}
+function foxHide(r){return!!(fox&&!fox.end&&r.id===fox.foxId&&!foxSignal())}
+function foxFinish(msg,cls){fox.end=Date.now();hudBig('Fuchsjagd vorbei',msg,cls||'',5);$('foxbox').hidden=true;foxCatch=0}
+function foxUpdate(dt){const box=$('foxbox'),now=Date.now();
+ // Einladungen / Status von anderen
+ for(const r of remotes.values()){const fx=r.st.fx;if(!Array.isArray(fx)||typeof fx[0]!=='string')continue;
+  if(!foxSeen[fx[0]]&&!fox&&+fx[2]+FOX_DUR>now&&!fx[3]){foxSeen[fx[0]]=1;const fr=fx[1]===net.myId?null:remotes.get(fx[1]);fox={id:String(fx[0]).slice(0,12),foxId:fx[1],foxName:fr?fr.name:r.name,start:+fx[2],me:0,caught:0,end:0};
+   hudBig('Fuchsjagd!',esc(fox.foxName)+' ist der Fuchs · Fang ihn! (alle 30 s kurz auf dem Radar)','',4.5);sfx.wanted()}
+  if(fox&&!fox.me&&!fox.end&&fx[0]===fox.id&&r.id===fox.foxId&&fx[3]){const w=fx[3];
+   if(w===net.myId){addCash(15000);saveGame();sfx.win();foxFinish('Du hast den Fuchs gefangen! + € 15.000','good')}
+   else if(w==='x')foxFinish('Der Fuchs ist entkommen.');else{const cr=remotes.get(w);foxFinish((cr?esc(cr.name):'Jemand')+' hat den Fuchs gefangen.')}}}
+ if(!fox){box.hidden=true;return}
+ if(fox.end){if(now-fox.end>12000){fox=null;foxCatch=0}return}
+ const left=fox.start+FOX_DUR-now;
+ if(fox.me){for(const r of remotes.values())if(Array.isArray(r.st.fc)&&r.st.fc[0]===fox.id&&!fox.caught){fox.caught=r.id;sfx.fail();foxFinish('Erwischt von '+esc(r.name)+'!','bad');return}
+  if(left<=0){fox.caught='x';addCash(25000);saveGame();sfx.win();foxFinish('Du bist entkommen! + € 25.000','good');djSay('Der Fuchs '+save.name+' ist entkommen. Peinlich für alle Jäger.');return}}
+ else{const fr=remotes.get(fox.foxId);if(!fr&&now>fox.start+5000){foxFinish('Der Fuchs hat die Stadt verlassen.');return}
+  if(fr&&now>fox.start&&state==='play'&&Math.hypot(fr.x-FX,fr.z-FZ)<4.5){foxCatch=fox.id;hudSub('Erwischt! Warte auf Bestätigung …',1.5)}
+  if(left<-6000){foxFinish('Der Fuchs ist entkommen.');return}}
+ box.hidden=false;const pre=now<fox.start;
+ box.innerHTML='🦊 Fuchsjagd · '+(pre?'Start in '+Math.ceil((fox.start-now)/1000)+' s':fmtRace(Math.max(0,left)).replace(/,\d$/,''))+'<small>'+(fox.me?'Du bist der Fuchs · '+(foxSignal()?'<b style="color:#ff6a3d">DU BIST GERADE SICHTBAR!</b>':'nächstes Signal in '+Math.ceil((FOX_PING-((now-fox.start)%FOX_PING))/1000)+' s'):'Fuchs: '+esc(fox.foxName)+' · '+(foxSignal()?'<b style="color:#ff6a3d">JETZT AUF DEM RADAR!</b>':pre?'gleich geht’s los':'nächstes Signal in '+Math.ceil((FOX_PING-((now-fox.start)%FOX_PING))/1000)+' s'))+'</small>'}
+{const _ms=myState;myState=function(){const s=_ms();if(fox)s.fx=[fox.id,fox.foxId,fox.start,fox.me?(fox.caught||0):0];if(foxCatch)s.fc=[foxCatch];return s}}
+{const _rb=radarBlips;radarBlips=function(){const b=_rb();for(const q of BLITZ)b.unshift([q.x,q.z,'#cfd6de',3,0]);
+ if(fox&&!fox.me&&!fox.end&&foxSignal()){const fr=remotes.get(fox.foxId);if(fr)b.push([fr.x,fr.z,(performance.now()/150|0)%2?'#ff9a3d':'#fff',9,1,'F'])}return b}}
+
+// ---------- Schnee im Winter (Nov–Feb, für alle gleich)
+function isWinter(){const m=new Date().getMonth();return m===10||m===11||m===0||m===1}
+
+// ---------- Hauptschleife der Extras
+let winterChk=0;
+function updateExtras(dt){if(state!=='play')return;
+ driftUpdate(dt);blitzUpdate(dt);incomeUpdate(dt);wurstBuyCheck();ghostUpdate(dt);foxUpdate(dt);djUpdate(dt);djStarsCheck();
+ winterChk-=dt;if(winterChk<=0){winterChk=30;SNOWY=isWinter()}}
 // ================= UMWELT, KAMERA, SPIELSCHLEIFE =================
 const ENV=[[0,0x050816,0x0e152b,0x8fa8ff,.2,.34,1],[5.2,0x050816,0x0e152b,0x8fa8ff,.2,.34,1],[6.6,0x3b5a9c,0xf2a26b,0xffb98a,.5,.5,.4],[8.2,0x2f7fd6,0xb9dcf5,0xfff3dc,.8,.62,0],[17.3,0x2f7fd6,0xb9dcf5,0xfff3dc,.8,.62,0],[19.4,0x2c3f85,0xf58d5a,0xff9a62,.5,.48,.45],[21,0x050816,0x0e152b,0x8fa8ff,.2,.34,1],[24,0x050816,0x0e152b,0x8fa8ff,.2,.34,1]];
 const _c1=new T.Color(),_c2=new T.Color(),_grey=new T.Color(0x7d8791),_sd=new T.Vector3();
@@ -2012,14 +2149,14 @@ const headSpot=new T.SpotLight(0xfff0d0,0,75,.55,.6,1.3);scene.add(headSpot,head
 let rainTarget=0;
 const DAYMIN=24;
 function worldClock(){return(Date.now()/60000/DAYMIN%1)*24}
-function worldWeather(){const slot=Math.floor(Date.now()/240000);return mulberry(slot*2654435761)()<.26?1:0}
+function worldWeather(){const slot=Math.floor(Date.now()/240000);const m=new Date().getMonth(),w=m===10||m===11||m===0||m===1;return mulberry(slot*2654435761)()<(w?.42:.26)?1:0}
 const RAINN=1400,rainPos=new Float32Array(RAINN*3);for(let i=0;i<RAINN;i++){rainPos[i*3]=rand(-45,45);rainPos[i*3+1]=rand(0,40);rainPos[i*3+2]=rand(-45,45)}
 const rainGeo=new T.BufferGeometry();rainGeo.setAttribute('position',new T.BufferAttribute(rainPos,3));
 const rainPts=new T.Points(rainGeo,new T.PointsMaterial({color:0xb8c8d8,size:2.2,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false}));rainPts.frustumCulled=false;rainPts.visible=false;scene.add(rainPts);
 function envUpdate(dt){gameTime=worldClock();rainTarget=worldWeather();RAIN+=(rainTarget-RAIN)*Math.min(1,dt*.25);
  let k=0;while(k<ENV.length-2&&gameTime>=ENV[k+1][0])k++;const a=ENV[k],b=ENV[k+1],t=clamp((gameTime-a[0])/(b[0]-a[0]),0,1);
  const top=skyMat.uniforms.top.value,bot=skyMat.uniforms.bot.value;top.set(a[1]).lerp(_c1.set(b[1]),t);bot.set(a[2]).lerp(_c1.set(b[2]),t);
- nightK=lerp(a[6],b[6],t);const gl=1-nightK*.8;_c2.copy(_grey).multiplyScalar(gl);top.lerp(_c2,RAIN*.75);bot.lerp(_c2,RAIN*.8);
+ nightK=lerp(a[6],b[6],t);const gl=1-nightK*.8;_c2.copy(_grey);if(SNOWY)_c2.set(0xc9d2dc);_c2.multiplyScalar(gl);top.lerp(_c2,RAIN*.75);bot.lerp(_c2,RAIN*.8);
  scene.fog.color.copy(bot);scene.fog.near=lerp(140,60,RAIN);scene.fog.far=lerp(560,330,RAIN);
  sun.color.set(a[3]).lerp(_c1.set(b[3]),t);sun.intensity=lerp(a[4],b[4],t)*(1-RAIN*.55);hemi.intensity=lerp(a[5],b[5],t)*(1-RAIN*.15);hemi.color.copy(top).lerp(_c1.set(0xffffff),.55);
  const day=gameTime>=6&&gameTime<20,ang=day?(gameTime-6)/14*Math.PI:((gameTime+4)%24)/10*Math.PI;_sd.set(Math.cos(ang),Math.max(.28,Math.sin(ang)),day?.38:-.3).normalize();
@@ -2030,7 +2167,7 @@ function envUpdate(dt){gameTime=worldClock();rainTarget=worldWeather();RAIN+=(ra
  bulbMat.color.set(0x55554f).lerp(_c1.set(0xfff0c0),nightK);poolMat.opacity=nightK*.8;headMat.color.set(0xcfcab8).lerp(_c1.set(0xfff6d0),nightK);beamMat.opacity=nightK*.42;
  towerLight.visible=(performance.now()/700|0)%2===0;
  const c=player.car;if(c&&nightK>.15&&!c.dead){const fx2=Math.sin(c.h),fz2=Math.cos(c.h);headSpot.position.set(c.x+fx2*1.6,c.y+1.1,c.z+fz2*1.6);headSpot.target.position.set(c.x+fx2*22,c.y,c.z+fz2*22);headSpot.intensity=1.7*nightK}else headSpot.intensity=0;
- if(RAIN>.03){rainPts.visible=true;rainPts.material.opacity=RAIN*.55;rainPts.position.set(camera.position.x,camera.position.y-18,camera.position.z);for(let i=1;i<RAINN*3;i+=3){rainPos[i]-=46*dt;if(rainPos[i]<0)rainPos[i]+=40}rainGeo.attributes.position.needsUpdate=true}else rainPts.visible=false;
+ if(RAIN>.03){rainPts.visible=true;const pm=rainPts.material;if(SNOWY!==pm.userData.snow){pm.userData.snow=SNOWY;pm.color.set(SNOWY?0xffffff:0xb8c8d8);pm.size=SNOWY?5:2.2}pm.opacity=RAIN*(SNOWY?.9:.55);rainPts.position.set(camera.position.x,camera.position.y-18,camera.position.z);const fs=SNOWY?5.5:46,tt=performance.now()/1000;for(let i=1;i<RAINN*3;i+=3){rainPos[i]-=fs*dt;if(SNOWY)rainPos[i-1]+=Math.sin(tt*1.3+i)*dt*.9;if(rainPos[i]<0)rainPos[i]+=40}rainGeo.attributes.position.needsUpdate=true}else rainPts.visible=false;
  if(flash.intensity>0)flash.intensity=Math.max(0,flash.intensity-dt*18);for(const l of tracers)if(l.visible){l.userData.t-=dt;if(l.userData.t<=0)l.visible=false}}
 
 let camMode=0,attract=0;const camPos=new T.Vector3(342,30,500),camTgt=new T.Vector3(),_cd=new T.Vector3();
@@ -2068,7 +2205,7 @@ function step(dt){const sdt=state==='over'?dt*.35:dt;
   if(pc.throwRider){const imp=pc.throwRider;pc.throwRider=0;const vx=pc.vx,vz=pc.vz;exitCar();player.kvx=vx*.7;player.kvz=vz*.7;player.vy=4;player.y+=.4;playerDamage(Math.min(60,imp*1.6));shake=1;hudSub('Abgeworfen!',2)}
   else if(pc.t.bike)placeRider(player.mesh,pc,0,player.weapon)}
  updateTraffic(sdt);updatePeds(sdt);updatePolice(sdt);updatePickups(sdt);
- if(state==='play'){missionUpdate(sdt);taxiUpdate(sdt);updateSites(sdt);updateShops();updateCasino();updateCop(sdt);updateRaceSite()}if(state==='play'||state==='over')updateRace(sdt);updateRob(sdt);netUpdate(dt);
+ if(state==='play'){missionUpdate(sdt);taxiUpdate(sdt);updateSites(sdt);updateShops();updateCasino();updateCop(sdt);updateRaceSite();updateExtras(sdt)}if(state==='play'||state==='over')updateRace(sdt);updateRob(sdt);netUpdate(dt);
  if(state==='over'){overT+=dt;if(overT>2.7)fade(1);if(overT>3.6){respawn();fade(0)}}
  updateProjectiles(sdt);updateParts(sdt);updateLights(sdt);envUpdate(sdt);updateCamera(dt);if(state!=='menu')updateHud(dt);updateAudio(dt);
  for(const k in pressed)delete pressed[k]}
@@ -2077,7 +2214,7 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,Math.max(
 
 // ---------- Menü & Pause
 let pauseT=0;
-function pause(on){if(on){if(state!=='play')return;state='pause';if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}pauseT=performance.now();$('pause').hidden=false;try{drawBigMap()}catch(e){console.error(e)}$('bResume').focus();if(AC)AC.suspend();saveGame()}
+function pause(on){if(on){if(state!=='play')return;state='pause';if(document.exitPointerLock)try{document.exitPointerLock()}catch(e){}pauseT=performance.now();$('pause').hidden=false;try{drawBigMap()}catch(e){console.error(e)}$('bResume').focus();if(AC)AC.suspend();try{speechSynthesis.cancel()}catch(e){}saveGame()}
  else{if(state!=='pause')return;$('pause').hidden=true;state='play';last=performance.now();if(AC)AC.resume();canvas.focus({preventScroll:true})}
  for(const k in pressed)delete pressed[k];for(const k in keys)keys[k]=false}
 addEventListener('keydown',e=>{if(state==='pause'&&(e.code==='Escape'||e.code==='KeyM')&&performance.now()-pauseT>400){e.preventDefault();pause(false)}else if(state==='menu'&&(e.code==='Enter'||e.code==='Space')){e.preventDefault();startGame()}});
