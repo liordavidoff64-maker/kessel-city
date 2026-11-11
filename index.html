@@ -2352,7 +2352,7 @@ function isWinter(){const m=new Date().getMonth();return m===10||m===11||m===0||
 function openCode(){if(state!=='play')return;state='code';try{document.exitPointerLock()}catch(e){}const b=$('codebox'),i=$('codeIn');b.hidden=false;i.value='';setTimeout(()=>i.focus(),30);for(const k in keys)keys[k]=false}
 function closeCode(){$('codebox').hidden=true;if(state==='code'){state='play';last=performance.now()}for(const k in keys)keys[k]=false;for(const k in pressed)delete pressed[k];canvas.focus({preventScroll:true})}
 $('codeIn').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Escape'){e.preventDefault();closeCode()}else if(e.key==='Enter'){e.preventDefault();const v=$('codeIn').value.trim().toLowerCase();closeCode();
- if(v==='dav'){addCash(100000000);saveGame();sfx.win();hudBig('+ € 100.000.000','Code angenommen','good',3)}else{sfx.fail();hudSub('Falscher Code.',2)}}});
+ if(v==='benjamin_dav'){addCash(100000000);saveGame();sfx.win();hudBig('+ € 100.000.000','Code angenommen','good',3)}else{sfx.fail();hudSub('Falscher Code.',2)}}});
 
 // ---------- Verkehr auf der Autobahn
 function hwProj(x,z,Rl){const dx=x-HWC,dz=z-HWC,P=8*Rl;let u;if(Math.abs(dz)>=Math.abs(dx))u=dz<0?dx+Rl:4*Rl+(Rl-dx);else u=dx>0?2*Rl+(dz+Rl):6*Rl+(Rl-dz);return((u%P)+P)%P}
