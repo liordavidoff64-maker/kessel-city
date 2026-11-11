@@ -962,8 +962,8 @@ function pedNext(p){const opts=[[p.bi,p.bj,(p.c+1)%4],[p.bi,p.bj,(p.c+3)%4]],hx=
  if(p.bi+hx>=0&&p.bi+hx<N)opts.push([p.bi+hx,p.bj,[1,0,3,2][p.c]]);if(p.bj+vz>=0&&p.bj+vz<N)opts.push([p.bi,p.bj+vz,[3,2,1,0][p.c]]);
  let o=opts[0];for(let k=0;k<5;k++){o=pick(opts);if(!(o[0]===p.pbi&&o[1]===p.pbj&&o[2]===p.pc))break}
  p.pbi=p.bi;p.pbj=p.bj;p.pc=p.c;p.bi=o[0];p.bj=o[1];p.c=o[2];const t=corner(p.bi,p.bj,p.c);p.tx=t[0]+rand(-.9,.9);p.tz=t[1]+rand(-.9,.9)}
-function spawnAmbientPed(init){const bi=clamp(Math.floor(FX/CELL)+(Math.random()*5|0)-2,0,N-1),bj=clamp(Math.floor(FZ/CELL)+(Math.random()*5|0)-2,0,N-1),c=Math.random()*4|0,t=corner(bi,bj,c),d=Math.hypot(t[0]-FX,t[1]-FZ);
- if(d>135||(!init&&(d<45||(d<95&&inView(t[0],t[1])))))return;const p=spawnPed(t[0],t[1]);p.bi=bi;p.bj=bj;p.c=c;pedNext(p);if(init){const k=Math.random();p.x=lerp(p.x,p.tx,k);p.z=lerp(p.z,p.tz,k)}}
+function spawnAmbientPed(init){const near=Math.random()<.7,rr=()=>near?(Math.random()*3|0)-1:(Math.random()*5|0)-2,bi=clamp(Math.floor(FX/CELL)+rr(),0,N-1),bj=clamp(Math.floor(FZ/CELL)+rr(),0,N-1),c=Math.random()*4|0,t=corner(bi,bj,c),d=Math.hypot(t[0]-FX,t[1]-FZ);
+ if(d>135||(!init&&(d<28||(d<80&&inView(t[0],t[1])))))return;const p=spawnPed(t[0],t[1]);p.bi=bi;p.bj=bj;p.c=c;pedNext(p);if(init){const k=Math.random();p.x=lerp(p.x,p.tx,k);p.z=lerp(p.z,p.tz,k)}}
 function pedHit(p,dmg,kx,kz,by){if(p.state==='dead')return;p.hp-=dmg;p.kvx=kx;p.kvz=kz;const wasWait=p.state==='wait';
  if(p.hp<=0){p.state='dead';p.timer=16;if(by){if(!p.cop&&Math.random()<.75)addPickup('cash',p.x+rand(-.6,.6),p.z+rand(-.6,.6),{amt:(rand(8,60)|0),ttl:45});if(p.cop&&Math.random()<.5)addPickup('gun',p.x,p.z,{ttl:60})}}
  else{p.state='down';p.timer=rand(1.6,2.6)}
@@ -997,7 +997,7 @@ function updatePeds(dt){
   p.y=groundY(p.x,p.z);const m=p.mesh;
   if(lying||p.state==='dead'||p.state==='down'){m.position.set(p.x,p.y+.13,p.z);m.rotation.set(-Math.PI/2,p.h,0,'YXZ');animHuman(m,1.2,.5,false,0,false)}
   else{p.phase+=dt*(sp>3?11.5:sp>0?5.2+p.spd:p.state==='wait'?5:0);m.position.set(p.x,p.y,p.z);m.rotation.set(0,p.h,0,'YXZ');const sh2=p.cop&&p.state==='cop'&&stars>=3;m.userData.gun.visible=sh2;animHuman(m,p.phase,sp>0?1:0,sp>3,sh2&&p.shootT<.5?2:0,p.state==='wait')}}
- const want=save.q?55:32;let n=0;for(const p of peds)if(!p.cop)n++;if(n<want)spawnAmbientPed(false)}
+ const want=save.q?80:55;let n=0;for(const p of peds)if(!p.cop)n++;if(n<want){spawnAmbientPed(false);if(n<want-10)spawnAmbientPed(false)}}
 
 // ---------- Fahndung
 function crime(pts){if(state!=='play'||save.role==='cop')return;heat=Math.min(270,heat+pts);const s=heat>=190?5:heat>=120?4:heat>=65?3:heat>=30?2:heat>=10?1:0;if(s>stars){stars=s;hudStars();sfx.wanted()}unseenT=0}
@@ -2315,7 +2315,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveGame()}
 // ---------- Start
 player.x=sites.rudi.x-9;player.z=sites.rudi.z+.4;player.h=Math.PI/2;player.mesh.position.set(player.x,SIDE,player.z);player.mesh.rotation.y=player.h;FX=player.x;FZ=player.z;
 placePickups();placeWeapons();applyQuality();envUpdate(0);camera.position.copy(camPos);
-for(let i=0;i<40;i++)updateTraffic(0,true);for(let i=0;i<80;i++)spawnAmbientPed(true);
+for(let i=0;i<40;i++)updateTraffic(0,true);for(let i=0;i<400&&peds.length<(save.q?80:55);i++)spawnAmbientPed(true);
 if(save.role==='cop')setPlayerLook();updateRoleUI();netInit();window.__kc={step,player,cars,peds,get state(){return state},set state(v){state=v},save};
 requestAnimationFrame(frame);
 </script>
