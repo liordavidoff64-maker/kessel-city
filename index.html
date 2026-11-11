@@ -963,7 +963,7 @@ function pedNext(p){const opts=[[p.bi,p.bj,(p.c+1)%4],[p.bi,p.bj,(p.c+3)%4]],hx=
  let o=opts[0];for(let k=0;k<5;k++){o=pick(opts);if(!(o[0]===p.pbi&&o[1]===p.pbj&&o[2]===p.pc))break}
  p.pbi=p.bi;p.pbj=p.bj;p.pc=p.c;p.bi=o[0];p.bj=o[1];p.c=o[2];const t=corner(p.bi,p.bj,p.c);p.tx=t[0]+rand(-.9,.9);p.tz=t[1]+rand(-.9,.9)}
 function spawnAmbientPed(init){const near=Math.random()<.7,rr=()=>near?(Math.random()*3|0)-1:(Math.random()*5|0)-2,bi=clamp(Math.floor(FX/CELL)+rr(),0,N-1),bj=clamp(Math.floor(FZ/CELL)+rr(),0,N-1),c=Math.random()*4|0,t=corner(bi,bj,c),d=Math.hypot(t[0]-FX,t[1]-FZ);
- if(d>135||(!init&&(d<28||(d<80&&inView(t[0],t[1])))))return;const p=spawnPed(t[0],t[1]);p.bi=bi;p.bj=bj;p.c=c;pedNext(p);if(init){const k=Math.random();p.x=lerp(p.x,p.tx,k);p.z=lerp(p.z,p.tz,k)}}
+ if(d>112||(!init&&(d<28||(d<80&&inView(t[0],t[1])))))return;const p=spawnPed(t[0],t[1]);p.bi=bi;p.bj=bj;p.c=c;pedNext(p);if(init){const k=Math.random();p.x=lerp(p.x,p.tx,k);p.z=lerp(p.z,p.tz,k)}}
 function pedHit(p,dmg,kx,kz,by){if(p.state==='dead')return;p.hp-=dmg;p.kvx=kx;p.kvz=kz;const wasWait=p.state==='wait';
  if(p.hp<=0){p.state='dead';p.timer=16;if(by){if(!p.cop&&Math.random()<.75)addPickup('cash',p.x+rand(-.6,.6),p.z+rand(-.6,.6),{amt:(rand(8,60)|0),ttl:45});if(p.cop&&Math.random()<.5)addPickup('gun',p.x,p.z,{ttl:60})}}
  else{p.state='down';p.timer=rand(1.6,2.6)}
@@ -983,7 +983,7 @@ function copPed(p,dt,d){if(stars===0||state!=='play'){p.timer-=dt;if(d>26||p.tim
  if(d>60)p.gone=true;return sp}
 function updatePeds(dt){
  for(let i=peds.length-1;i>=0;i--){const p=peds[i],dx=p.x-FX,dz=p.z-FZ,d2=dx*dx+dz*dz;
-  if((d2>150*150&&!p.keep)||p.gone||(p.state==='dead'&&p.timer<=0)){disposeHuman(p.mesh);peds.splice(i,1);continue}
+  if((d2>118*118&&!p.keep)||p.gone||(p.state==='dead'&&p.timer<=0)){disposeHuman(p.mesh);peds.splice(i,1);continue}
   let sp=0,lying=false;
   if(p.state==='dead'||p.state==='down'){lying=true;p.timer-=dt;p.x+=p.kvx*dt;p.z+=p.kvz*dt;const k=Math.exp(-4*dt);p.kvx*=k;p.kvz*=k;if(resolveCircle(p.x,p.z,.3,0)){p.x=_hit.x;p.z=_hit.z}
    if(p.state==='down'&&p.timer<=0){p.state=p.cop?'cop':'flee';p.timer=rand(5,8)}}
