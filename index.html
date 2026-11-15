@@ -2630,8 +2630,9 @@ $('bSnd').addEventListener('click',()=>{save.snd=save.snd?0:1;$('bSnd').textCont
 setInterval(()=>{if(state==='play'||state==='shop')saveGame()},8000);
 // ---------- Not-Aus: Ist die Seite auf Netlify abgeschaltet (Disable project), schließt das Spiel bei allen
 let srvFails=0,srvClosed=false,srvPrev='';
-async function serverCheck(){if(!/^https?:$/.test(location.protocol)||(window.claude&&window.claude.use))return;
- let st=0,txt='';try{const base=location.origin+location.pathname.replace(/[^/]*$/,'');const r=await fetch(base+'alive.txt?t='+Date.now(),{cache:'no-store'});st=r.status;txt=st===200?await r.text():''}catch(e){return}
+const GH_ALIVE='https://raw.githubusercontent.com/liordavidoff64-maker/kessel-city/main/alive.txt';
+async function serverCheck(){if(window.claude&&window.claude.use)return;const web=/^https?:$/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname);
+ let st=0,txt='';try{const url=web?location.origin+location.pathname.replace(/[^/]*$/,'')+'alive.txt?t='+Date.now():GH_ALIVE+'?t='+Date.now();const r=await fetch(url,{cache:'no-store'});st=r.status;txt=st===200?await r.text():''}catch(e){return}
  if(st===429||st>=500&&st!==503)return;const down=!txt.includes('kessel-city-online');
  if(down){srvFails++;if(srvFails>=2&&!srvClosed)closeGame()}else{srvFails=0;if(srvClosed){$('closedTxt').textContent='Kessel City ist wieder geöffnet.';$('bReopen').hidden=false}}}
 function closeGame(){srvClosed=true;saveGame();srvPrev=state;state='closed';
